@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RC Car Controller</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+    }
+    #status {
+      font-weight: bold;
+      margin: 10px;
+    }
+    .connected {
+      color: green;
+    }
+    .disconnected {
+      color: red;
+    }
+    #controls {
+      margin-top: 20px;
+    }
+    .key {
+      display: inline-block;
+      padding: 10px;
+      margin: 5px;
+      border: 2px solid black;
+      font-size: 20px;
+      width: 50px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+<h1>RC Car Controller</h1>
+<p id="status" class="disconnected">Status: Disconnected</p>
+
+<div id="controls">
+  <p>Use the keyboard to control the car:</p>
+  <div>
+    <div class="key">W</div>
+  </div>
+  <div>
+    <div class="key">A</div>
+    <div class="key">S</div>
+    <div class="key">D</div>
+  </div>
+  <p>Press "E" to use power-ups (Battle Mode)</p>
+</div>
+
+<script>
+  const socket = new WebSocket('ws://localhost:8081'); // Adjust to match your server
+
+  const keysPressed = {}; // Track currently pressed keys
+  const statusDisplay = document.getElementById("status");
+
+  socket.onopen = () => {
+    console.log("Connected to WebSocket server.");
+    statusDisplay.textContent = "Status: Connected";
+    statusDisplay.className = "connected";
+  };
+
+  socket.onclose = () => {
+    console.log("Disconnected from WebSocket server.");
+    statusDisplay.textContent = "Status: Disconnected";
+    statusDisplay.className = "disconnected";
+  };
+
+  socket.onerror = (error) => {
+    console.error("WebSocket error:", error);
+  };
+
+  document.addEventListener("keydown", (event) => {
+    const key = event.key.toLowerCase();
+
+    if (!keysPressed[key]) { // Only send the command if the key was not already pressed
+      keysPressed[key] = true;
+      sendCommand(getCommandForKey(key));
+    }
+  });
+
+  document.addEventListener("keyup", (event) => {
+    const key = event.key.toLowerCase();
+    if (keysPressed[key]) {
+      delete keysPressed[key]; // Remove key from tracking
+
+      if (key === 'w' || key === 's') {
+        socket.send("stopdriving");  // Stop moving, but not turning
+      }
+      else if (key === 'a' || key === 'd') {
+        socket.send("stopturning");  // Stop turning, but not moving
+      }
+    }
+  });
+
+  function getCommandForKey(key) {
+    switch (key) {
+      case 'w': return "forward";
+      case 's': return "reverse";
+      case 'a': return "left";
+      case 'd': return "right";
+      case 'e': return "powerup"; // Battle mode action
+      default: return "";
+    }
+  }
+
+  function sendCommand(command) {
+    if (command && socket.readyState === WebSocket.OPEN) {
+      socket.send(command);
+      console.log("Sent:", command);
+    }
+  }
+</script>
+
+</body>
+</html>
