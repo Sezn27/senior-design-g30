@@ -5,7 +5,7 @@ const char* ssid = "TheCrib1";
 const char* password = "DeezNuts";
 
 const char* websocketServer = "192.168.2.26";  // Your server IP
-const uint16_t websocketPort = 8080;
+const uint16_t websocketPort = 8082;
 
 const int driveMotorA = 12;
 const int driveMotorB = 14;
@@ -14,6 +14,10 @@ const int steeringMotorB = 26;
 
 WebSocketsClient webSocket;
 unsigned long lastReconnectAttempt = 0;
+
+// Track driving & turning state
+bool isDriving = false;
+bool isTurning = false;
 
 void setupMotors() {
     pinMode(driveMotorA, OUTPUT);
@@ -25,28 +29,37 @@ void setupMotors() {
 void driveForward() {
     digitalWrite(driveMotorA, HIGH);
     digitalWrite(driveMotorB, LOW);
+    isDriving = true;
 }
 
 void driveReverse() {
     digitalWrite(driveMotorA, LOW);
     digitalWrite(driveMotorB, HIGH);
+    isDriving = true;
+}
+
+void stopDriving() {
+    digitalWrite(driveMotorA, LOW);
+    digitalWrite(driveMotorB, LOW);
+    isDriving = false;
 }
 
 void steerLeft() {
     digitalWrite(steeringMotorA, HIGH);
     digitalWrite(steeringMotorB, LOW);
+    isTurning = true;
 }
 
 void steerRight() {
     digitalWrite(steeringMotorA, LOW);
     digitalWrite(steeringMotorB, HIGH);
+    isTurning = true;
 }
 
-void stopMotors() {
-    digitalWrite(driveMotorA, LOW);
-    digitalWrite(driveMotorB, LOW);
+void stopTurning() {
     digitalWrite(steeringMotorA, LOW);
     digitalWrite(steeringMotorB, LOW);
+    isTurning = false;
 }
 
 void webSocketEvent(WStype_t type, uint8_t *payload, size_t length) {
@@ -54,17 +67,13 @@ void webSocketEvent(WStype_t type, uint8_t *payload, size_t length) {
         Serial.printf("Received command: %s\n", payload);
         String command = String((char*)payload);
 
-        if (command == "forward") {
-            driveForward();
-        } else if (command == "reverse") {
-            driveReverse();
-        } else if (command == "left") {
-            steerLeft();
-        } else if (command == "right") {
-            steerRight();
-        } else if (command == "stop") {
-            stopMotors();
-        }
+        if (command == "forward") driveForward();
+        else if (command == "reverse") driveReverse();
+        else if (command == "left") steerLeft();
+        else if (command == "right") steerRight();
+        else if (command == "stopdriving") stopDriving();
+        else if (command == "stopturning") stopTurning();
+
     } else if (type == WStype_DISCONNECTED) {
         Serial.println("WebSocket Disconnected!");
     }
