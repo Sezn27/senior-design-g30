@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>R.A.C.E - Play</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <style>
+        /* General page styling */
+        body {
+            background-color: #2b2a33;
+            color: #ffffff;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        /* Navigation bar styling */
+        .navbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: #1c1b22;
+            padding: 15px 30px;
+        }
+        .navbar h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+        .exit-button {
+            padding: 10px 20px;
+            background-color: #2b2a33; /*Message to ChatGPT: LEAVE THIS AS #2b2a33 PLEASE*/
+            color: #fff;
+            text-decoration: none;
+            font-size: 18px;
+            border-radius: 5px;
+        }
+        .exit-button:hover {
+            background-color: #cc0000;
+        }
+        /* Main content container */
+        .main-container {
+            display: flex;
+            flex: 1;
+            padding: 20px;
+        }
+        /* Video container for the live feed */
+        .video-container {
+            flex: 3;
+            background-color: black;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .video-container img {
+            width: 100%;
+            max-height: 100%;
+        }
+        /* Control panel styling */
+        .control-panel {
+            flex: 1;
+            background-color: #1e1e1e;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            border-left: 2px solid #444;
+        }
+        .control-panel h2 {
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        .control-description {
+            text-align: left;
+            font-size: 18px;
+            line-height: 1.5;
+            width: 100%;
+            max-width: 250px;
+        }
+        /* Dropdown menu styling */
+        .car-selection {
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation Bar -->
+    <div class="navbar">
+        <h1>R.A.C.E: Remote Access Control for Electric Cars</h1>
+        <a href="index.html" class="exit-button">Exit Race</a>
+    </div>
+    
+    <!-- Main Content -->
+    <div class="main-container">
+        <!-- Live Video Feed Section -->
+        <div class="video-container">
+            <img id="video-feed" src="/video_feed/192.168.1.128" alt="Live Video Feed">
+        </div>
+        
+        <!-- Control Panel -->
+        <div class="control-panel">
+            <h2>Car Selection</h2>
+            <div class="car-selection">
+                <label for="carSelect">Choose Car:</label>
+                <select id="carSelect" onchange="updateCar()">
+                    <option value="192.168.1.131">Car 1</option>
+                    <option value="192.168.1.128">Car 2</option>
+                </select>
+            </div>
+            <h2>Controls</h2>
+            <p class="control-description">
+                W - Accelerate<br>
+                S - Brake/Reverse<br>
+                A - Turn Left<br>
+                D - Turn Right
+            </p>
+        </div>
+    </div>
+
+    <script>
+        var socket = io("http://192.168.1.86:5001"); // WebSocket Server IP
+        var selectedCar = "192.168.1.131"; // Default car selection
+        var keys = {}; // Track active keys to prevent repeated sends
+
+        // Handle WebSocket connection
+        socket.on("connect", function() {
+            console.log("WebSocket Connected!");
+        });
+
+        // Handle WebSocket disconnection
+        socket.on("disconnect", function() {
+            console.log("WebSocket Disconnected!");
+        });
+
+        // Function to send commands to the server for car control
+        function sendCommand(action) {
+            console.log("Sending command to", selectedCar, ":", action);
+            socket.emit("button_press", { car_ip: selectedCar, action: action });
+        }
+
+        // Function to update the selected car and change the video feed
+        function updateCar() {
+            selectedCar = document.getElementById("carSelect").value;
+            document.getElementById("video-feed").src = "/video_feed/" + selectedCar;
+            console.log("Selected Car:", selectedCar);
+        }
+
+        // Handle key press events for car control
+        document.addEventListener("keydown", function(event) {
+            if (!keys[event.key]) { // Ensure commands are not repeatedly sent while holding keys
+                keys[event.key] = true;
+                if (event.key.toLowerCase() === "w") sendCommand("move_forward");
+                if (event.key.toLowerCase() === "s") sendCommand("move_backward");
+                if (event.key.toLowerCase() === "a") sendCommand("turn_left");
+                if (event.key.toLowerCase() === "d") sendCommand("turn_right");
+            }
+        });
+
+        // Handle key release events to stop movement
+        document.addEventListener("keyup", function(event) {
+            keys[event.key] = false;
+            if (event.key.toLowerCase() === "w") sendCommand("stop");
+            if (event.key.toLowerCase() === "s") sendCommand("stop");
+            if ((event.key.toLowerCase() === "a") && !keys["d"]) sendCommand("stop_turn");
+            if ((event.key.toLowerCase() === "d") && !keys["a"]) sendCommand("stop_turn");
+        });
+    </script>
+</body>
+</html>
