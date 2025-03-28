@@ -1,34 +1,38 @@
 const express = require("express");
 const http = require("http");
-const socketIo = require("socket.io");
-const cors = require("cors");
-const axios = require("axios");
+const { Server } = require("socket.io");
 const WebSocket = require("ws");
+const axios = require("axios"); // Required for HTTP forwarding
 const readline = require("readline"); // For command line input
 
 const app = express();
-app.use(cors());
-
 const server = http.createServer(app);
-const io = socketIo(server, {
-    cors: { origin: "*" },
+const io = new Server(server, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
+  }
 });
 
 let finishLineSocket = null;
-
-// 🚦 WebSocket for Finish Line (Port 8084)
 
 let lapCounts = {
   blue: 0,
   red: 0
 };
+
 const LAP_THRESHOLD = 4;
 let currentDisplayedLap = 0;
 let raceStarted = false;
-const detectionCooldown = 5000; // 5 seconds cooldown between detections
+const detectionCooldown = 3000; // 3 seconds cooldown between detections
 let lastDetectionTime = {
   blue: 0,
   red: 0
+};
+
+let lapStartTime = {
+  blue: null,
+  red: null
 };
 
 // Start race sequence
@@ -39,6 +43,8 @@ function startRace() {
   lapCounts.red = 0;
   lastDetectionTime.blue = 0;
   lastDetectionTime.red = 0;
+  lapStartTime.blue = Date.now();
+  lapStartTime.red = Date.now();
   sendToFinishLine("show:countdown");
 }
 
@@ -67,6 +73,14 @@ finishLineServer.on("connection", (ws) => {
     const now = Date.now();
     if (lapCounts[color] !== undefined && now - lastDetectionTime[color] > detectionCooldown) {
       lastDetectionTime[color] = now;
+
+      // Record lap time before incrementing
+      if (lapStartTime[color] !== null) {
+        const lapTime = (now - lapStartTime[color]) / 1000; // in seconds
+        console.log(`${capitalize(color)} car completed Lap ${lapCounts[color] + 1} in ${lapTime.toFixed(2)} seconds`);
+        lapStartTime[color] = now; // Reset for next lap
+      }
+
       lapCounts[color]++;
       console.log(`${color} car now at lap ${lapCounts[color]}`);
 
@@ -80,7 +94,12 @@ finishLineServer.on("connection", (ws) => {
       // Check for win
       if (lapCounts[color] === LAP_THRESHOLD) {
         sendToFinishLine(`show:${capitalize(color)} Car Wins!`);
-        raceStarted = false;
+        lapStartTime[color] = null; // Stop tracking this car's lap time
+
+        // Check if both cars have finished
+        if (lapCounts.blue === LAP_THRESHOLD && lapCounts.red === LAP_THRESHOLD) {
+          raceStarted = false;
+        }
       }
     }
   });
