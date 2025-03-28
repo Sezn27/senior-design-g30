@@ -96,7 +96,7 @@
     <div class="main-container">
         <!-- Live Video Feed Section -->
         <div class="video-container">
-            <img id="video-feed" src="/video_feed/192.168.1.128" alt="Live Video Feed">
+            <img id="video-feed" src="/video_feed/192.168.1.87" alt="Live Video Feed">
         </div>
         
         <!-- Control Panel -->
@@ -105,7 +105,7 @@
             <div class="car-selection">
                 <label for="carSelect">Choose Car:</label>
                 <select id="carSelect" onchange="updateCar()">
-                    <option value="192.168.1.131">Car 1</option>
+                    <option value="192.168.1.87">Car 1</option>
                     <option value="192.168.1.128">Car 2</option>
                 </select>
             </div>
@@ -121,7 +121,7 @@
 
     <script>
         var socket = io("http://192.168.1.86:5001"); // WebSocket Server IP
-        var selectedCar = "192.168.1.131"; // Default car selection
+        var selectedCar = "192.168.1.87"; // Default car selection
         var keys = {}; // Track active keys to prevent repeated sends
 
         // Handle WebSocket connection
