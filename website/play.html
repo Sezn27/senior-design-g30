@@ -31,7 +31,7 @@
         }
         .exit-button {
             padding: 10px 20px;
-            background-color: #2b2a33; /*Message to ChatGPT: LEAVE THIS AS #2b2a33 PLEASE*/
+            background-color: #2b2a33;
             color: #fff;
             text-decoration: none;
             font-size: 18px;
@@ -46,7 +46,6 @@
             flex: 1;
             padding: 20px;
         }
-        /* Video container for the live feed */
         .video-container {
             flex: 3;
             background-color: black;
@@ -58,7 +57,6 @@
             width: 100%;
             max-height: 100%;
         }
-        /* Control panel styling */
         .control-panel {
             flex: 1;
             background-color: #1e1e1e;
@@ -79,27 +77,69 @@
             width: 100%;
             max-width: 250px;
         }
-        /* Dropdown menu styling */
         .car-selection {
             margin-bottom: 15px;
+        }
+        /* Modal overlay */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+        .modal-content {
+            background-color: #1c1b22;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px #000;
+            text-align: center;
+        }
+        .modal-content input {
+            padding: 10px;
+            margin-top: 10px;
+            width: 100%;
+            font-size: 16px;
+        }
+        .modal-content button {
+            margin-top: 15px;
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #007bff;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
         }
     </style>
 </head>
 <body>
+    <!-- Modal for username input -->
+    <div id="usernameModal" class="modal">
+        <div class="modal-content">
+            <h2>Enter Your Username</h2>
+            <input type="text" id="usernameInput" placeholder="Username">
+            <button onclick="submitUsername()">Submit</button>
+        </div>
+    </div>
+
     <!-- Navigation Bar -->
     <div class="navbar">
         <h1>R.A.C.E: Remote Access Control for Electric Cars</h1>
         <a href="index.html" class="exit-button">Exit Race</a>
     </div>
-    
+
     <!-- Main Content -->
     <div class="main-container">
-        <!-- Live Video Feed Section -->
         <div class="video-container">
             <img id="video-feed" src="/video_feed/192.168.1.128" alt="Live Video Feed">
         </div>
-        
-        <!-- Control Panel -->
+
         <div class="control-panel">
             <h2>Car Selection</h2>
             <div class="car-selection">
@@ -120,36 +160,46 @@
     </div>
 
     <script>
-        var socket = io("http://192.168.1.86:5001"); // WebSocket Server IP
-        var selectedCar = "192.168.1.131"; // Default car selection
-        var keys = {}; // Track active keys to prevent repeated sends
+        var socket = io("http://192.168.1.86:5001");
+        var selectedCar = "192.168.1.131";
+        var keys = {};
+        var username = null;
+        var controlsEnabled = false;
 
-        // Handle WebSocket connection
+        function submitUsername() {
+            const input = document.getElementById("usernameInput").value.trim();
+            if (input) {
+                username = input;
+		socket.emit("register_username", username);
+                controlsEnabled = true;
+                document.getElementById("usernameModal").style.display = "none";
+                console.log("Username set to:", username);
+            }
+        }
+
         socket.on("connect", function() {
             console.log("WebSocket Connected!");
         });
 
-        // Handle WebSocket disconnection
         socket.on("disconnect", function() {
             console.log("WebSocket Disconnected!");
         });
 
-        // Function to send commands to the server for car control
         function sendCommand(action) {
+            if (!controlsEnabled) return;
             console.log("Sending command to", selectedCar, ":", action);
             socket.emit("button_press", { car_ip: selectedCar, action: action });
         }
 
-        // Function to update the selected car and change the video feed
         function updateCar() {
             selectedCar = document.getElementById("carSelect").value;
             document.getElementById("video-feed").src = "/video_feed/" + selectedCar;
             console.log("Selected Car:", selectedCar);
         }
 
-        // Handle key press events for car control
         document.addEventListener("keydown", function(event) {
-            if (!keys[event.key]) { // Ensure commands are not repeatedly sent while holding keys
+            if (!controlsEnabled) return;
+            if (!keys[event.key]) {
                 keys[event.key] = true;
                 if (event.key.toLowerCase() === "w") sendCommand("move_forward");
                 if (event.key.toLowerCase() === "s") sendCommand("move_backward");
@@ -158,8 +208,8 @@
             }
         });
 
-        // Handle key release events to stop movement
         document.addEventListener("keyup", function(event) {
+            if (!controlsEnabled) return;
             keys[event.key] = false;
             if (event.key.toLowerCase() === "w") sendCommand("stop");
             if (event.key.toLowerCase() === "s") sendCommand("stop");

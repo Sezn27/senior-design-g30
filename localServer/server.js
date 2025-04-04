@@ -4,6 +4,7 @@ const { Server } = require("socket.io");
 const WebSocket = require("ws");
 const axios = require("axios"); // Required for HTTP forwarding
 const readline = require("readline"); // For command line input
+const mysql = require("mysql2");
 
 const app = express();
 const server = http.createServer(app);
@@ -14,13 +15,30 @@ const io = new Server(server, {
   }
 });
 
-let finishLineSocket = null;
+// MySQL connection pool
+const db = mysql.createPool({
+    host: "localhost",
+    user: "root",
+    password: "root",
+    database: "race_project"
+});
 
+// IPs of the ESP32 cars
+const carIPs = ["192.168.1.143", "192.168.1.87"]; // Red and Blue
+const carColors = {
+    "192.168.1.143": "Red",
+    "192.168.1.87": "Blue"
+};
+const carToUsername = {};
+const assignedColors = new Set();
+
+let finishLineSocket = null;
 let lapCounts = {
   blue: 0,
   red: 0
 };
-
+let redLastLapTime = null;
+let blueLastLapTime = null;
 const LAP_THRESHOLD = 4;
 let currentDisplayedLap = 0;
 let raceStarted = false;
@@ -29,15 +47,16 @@ let lastDetectionTime = {
   blue: 0,
   red: 0
 };
-
 let lapStartTime = {
   blue: null,
   red: null
 };
+let raceWinner = null;
 
 // Start race sequence
 function startRace() {
   raceStarted = true;
+  raceWinner = null;
   currentDisplayedLap = 1;
   lapCounts.blue = 0;
   lapCounts.red = 0;
@@ -57,57 +76,103 @@ function sendToFinishLine(message) {
     console.log("Finish line WebSocket not connected.");
   }
 }
+function handleLap(carColor, lapCount, carIP) {
+    const now = Date.now();
+    let lapTime = 0;
+    let carNumber = carColor === "red" ? 1 : 2;
+    const displayColor = capitalize(carColor);
+
+    // Lap 1: Log only and set starting timestamp
+    if (lapCount === 1) {
+        console.log(`${displayColor} car starting lap 1`);
+
+        if (carColor === "red") {
+            redLastLapTime = now;
+        } else {
+            blueLastLapTime = now;
+        }
+
+        return; // ⛔ Skip timing + DB insert
+    }
+
+    // ✅ Calculate lap time using valid timestamp
+    if (carColor === "red") {
+        lapTime = redLastLapTime ? (now - redLastLapTime) / 1000 : 0;
+        redLastLapTime = now;
+    } else {
+        lapTime = blueLastLapTime ? (now - blueLastLapTime) / 1000 : 0;
+        blueLastLapTime = now;
+    }
+
+    // 🧼 Console log once
+    console.log(`${displayColor} car completed lap ${lapCount}`);
+    console.log(`${displayColor.toUpperCase()} Lap ${lapCount}: ${lapTime.toFixed(2)}s`);
+
+    // 🔍 Lookup username
+    const username = carToUsername[carIP] || "Unknown";
+
+    // ✅ Save to DB
+    db.query(
+        "INSERT INTO leaderboard (username, car_number, lap_time, lap_count, timestamp) VALUES (?, ?, ?, ?, NOW())",
+        [username, carNumber, lapTime, lapCount],
+        (err) => {
+            if (err) console.error("Database error:", err);
+        }
+    );
+
+    // 🎯 Finish line display
+    if (lapCount === LAP_THRESHOLD) {
+        if (!raceWinner) {
+            raceWinner = carColor; // record first car to reach lap 4
+            sendToFinishLine(`show:${displayColor} Car Wins!`);
+        }
+    } else if (lapCount > currentDisplayedLap) {
+        currentDisplayedLap = lapCount;
+        sendToFinishLine(`show:lap ${lapCount}`);
+    }
+}
 
 // Handle color detection messages from ESP32 finish line
 const finishLineServer = new WebSocket.Server({ port: 8084 });
 finishLineServer.on("connection", (ws) => {
-  console.log("Finish line ESP32 connected.");
-  finishLineSocket = ws;
+    console.log("Finish line ESP32 connected.");
+    finishLineSocket = ws;
 
-  ws.on("message", (data) => {
-    const color = data.toString();
-    console.log("Finish line detection:", color);
+    ws.on("message", (data) => {
+        const color = data.toString().toLowerCase();
+        const now = Date.now();
 
-    if (!raceStarted) return;
-
-    const now = Date.now();
-    if (lapCounts[color] !== undefined && now - lastDetectionTime[color] > detectionCooldown) {
-      lastDetectionTime[color] = now;
-
-      // Record lap time before incrementing
-      if (lapStartTime[color] !== null) {
-        const lapTime = (now - lapStartTime[color]) / 1000; // in seconds
-        console.log(`${capitalize(color)} car completed Lap ${lapCounts[color] + 1} in ${lapTime.toFixed(2)} seconds`);
-        lapStartTime[color] = now; // Reset for next lap
-      }
-
-      lapCounts[color]++;
-      console.log(`${color} car now at lap ${lapCounts[color]}`);
-
-      // Only update display if this is a new max lap
-      const newLap = Math.max(lapCounts.blue, lapCounts.red);
-      if (newLap > currentDisplayedLap && newLap <= LAP_THRESHOLD) {
-        currentDisplayedLap = newLap;
-        sendToFinishLine(`show:lap ${newLap}`);
-      }
-
-      // Check for win
-      if (lapCounts[color] === LAP_THRESHOLD) {
-        sendToFinishLine(`show:${capitalize(color)} Car Wins!`);
-        lapStartTime[color] = null; // Stop tracking this car's lap time
-
-        // Check if both cars have finished
-        if (lapCounts.blue === LAP_THRESHOLD && lapCounts.red === LAP_THRESHOLD) {
-          raceStarted = false;
+        // Always print detected color
+        if (color === "red") {
+            console.log("Detected: red");
+        } else if (color === "blue") {
+            console.log("Detected: blue");
         }
-      }
-    }
-  });
 
-  ws.on("close", () => {
-    console.log("Finish Line ESP32 Disconnected");
-    finishLineSocket = null;
-  });
+        // Only handle lap logic if race is started
+        if (!raceStarted) return;
+
+        // ⛔ Skip if car already finished
+        if (color === "red" && lapCounts.red >= LAP_THRESHOLD) return;
+        if (color === "blue" && lapCounts.blue >= LAP_THRESHOLD) return;
+
+        if (color === "red" && now - lastDetectionTime.red >= detectionCooldown) {
+            lastDetectionTime.red = now;
+            lapCounts.red++;
+            handleLap("red", lapCounts.red, "192.168.1.143");
+        }
+
+        if (color === "blue" && now - lastDetectionTime.blue >= detectionCooldown) {
+            lastDetectionTime.blue = now;
+            lapCounts.blue++;
+            handleLap("blue", lapCounts.blue, "192.168.1.87");
+        }
+    });
+
+    ws.on("close", () => {
+        console.log("Finish Line ESP32 Disconnected");
+        finishLineSocket = null;
+    });
 });
 
 function capitalize(word) {
@@ -117,6 +182,31 @@ function capitalize(word) {
 // 🏎️ Car Control WebSocket (Port 5001)
 io.on("connection", (socket) => {
     console.log("New client connected:", socket.id);
+
+    socket.on("register_username", (username) => {
+        socket.username = username; // track user
+        let carColor, carIP;
+
+        if (!assignedColors.has("Red")) {
+            carColor = "Red";
+            carIP = "192.168.1.143";
+            assignedColors.add("Red");
+        } else if (!assignedColors.has("Blue")) {
+            carColor = "Blue";
+            carIP = "192.168.1.87";
+            assignedColors.add("Blue");
+        } else {
+            socket.emit("car_assignment", { carColor: "Spectator", carIP: null });
+            return;
+        }
+
+        carToUsername[carIP] = username;
+        console.log(`Assigned ${username} to ${carColor} car (${carIP})`);
+
+        // Send assignment info back to client
+        socket.emit("car_assignment", { carColor, carIP });
+    });
+
 
     socket.on("button_press", async (data) => {
         const carIP = data.car_ip;
@@ -133,6 +223,22 @@ io.on("connection", (socket) => {
 
     socket.on("disconnect", () => {
         console.log("Client disconnected:", socket.id);
+
+        // Find which car IP was assigned to this user
+        const assignedEntry = Object.entries(carToUsername).find(([carIP, username]) => {
+            return username && socket.username === username;
+        });
+
+        if (assignedEntry) {
+            const [carIP, username] = assignedEntry;
+            const carColor = carColors[carIP];
+
+            console.log(`User ${username} disconnected, freeing up ${carColor} car`);
+
+            // Remove the assignment
+            delete carToUsername[carIP];
+            assignedColors.delete(carColor);
+        }
     });
 
     // Handle race start request from frontend
