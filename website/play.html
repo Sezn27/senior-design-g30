@@ -1,11 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>R.A.C.E - Play</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
-    <style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>R.A.C.E - Play</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+  <style>
         /* General page styling */
         body {
             background-color: #2b2a33;
@@ -116,106 +116,174 @@
             border-radius: 5px;
             cursor: pointer;
         }
-    </style>
+  </style>
 </head>
 <body>
-    <!-- Modal for username input -->
-    <div id="usernameModal" class="modal">
-        <div class="modal-content">
-            <h2>Enter Your Username</h2>
-            <input type="text" id="usernameInput" placeholder="Username">
-            <button onclick="submitUsername()">Submit</button>
-        </div>
+  <!-- Modal for username input -->
+  <div id="usernameModal" class="modal">
+    <div class="modal-content">
+      <h2>Enter Your Username</h2>
+      <input type="text" id="usernameInput" placeholder="Username"/>
+      <button onclick="submitUsername()">Submit</button>
+    </div>
+  </div>
+
+  <!-- Navigation Bar -->
+  <div class="navbar">
+    <h1>R.A.C.E: Remote Access Control for Electric Cars</h1>
+    <a href="index.html" class="exit-button">Exit Race</a>
+  </div>
+
+  <!-- Main Content -->
+  <div class="main-container">
+    <div class="video-container">
+      <img id="video-feed" src="" alt="Live Video Feed" />
     </div>
 
-    <!-- Navigation Bar -->
-    <div class="navbar">
-        <h1>R.A.C.E: Remote Access Control for Electric Cars</h1>
-        <a href="index.html" class="exit-button">Exit Race</a>
+    <div class="control-panel">
+      <h2>Assigned Car</h2>
+      <p id="assignedCarText">Waiting for assignment...</p>
+
+      <h2>Controls</h2>
+      <p class="control-description">
+        W - Accelerate<br />
+        S - Brake/Reverse<br />
+        A - Turn Left<br />
+        D - Turn Right
+      </p>
     </div>
-
-    <!-- Main Content -->
-    <div class="main-container">
-        <div class="video-container">
-            <img id="video-feed" src="/video_feed/192.168.1.128" alt="Live Video Feed">
-        </div>
-
-        <div class="control-panel">
-            <h2>Car Selection</h2>
-            <div class="car-selection">
-                <label for="carSelect">Choose Car:</label>
-                <select id="carSelect" onchange="updateCar()">
-                    <option value="192.168.1.131">Car 1</option>
-                    <option value="192.168.1.128">Car 2</option>
-                </select>
-            </div>
-            <h2>Controls</h2>
-            <p class="control-description">
-                W - Accelerate<br>
-                S - Brake/Reverse<br>
-                A - Turn Left<br>
-                D - Turn Right
-            </p>
-        </div>
+    <div id="race-stats" class="race-stats">
+      <h2>Race Statistics</h2>
+      <p><strong>Lap:</strong> <span id="lapDisplay">Waiting...</span></p>
+      <p><strong>Current Lap:</strong> <span id="currentLapTime">--</span></p>
+      <p><strong>Last Lap:</strong> <span id="lastLapTime">--</span></p>
+      <p id="raceWinnerLine" style="display: none;"><strong>Race Winner:</strong> <span id="raceWinner">--</span></p>
     </div>
+  </div>
 
-    <script>
-        var socket = io("http://192.168.1.86:5001");
-        var selectedCar = "192.168.1.131";
-        var keys = {};
-        var username = null;
-        var controlsEnabled = false;
+  <script>
+    const socket = io("http://192.168.1.86:5001");
+    let assignedCarIP = null;
+    let keys = {};
+    let username = null;
+    let controlsEnabled = false;
+    let userCarColor = null;
+    let userCarIP = null;
+    let currentLap = 0;
+    let lapStartTime = null;
+    let lastLapTime = null;
+    let raceWonBy = null;
+    let lapTimerInterval = null;
+    function submitUsername() {
+      const input = document.getElementById("usernameInput").value.trim();
+      if (input) {
+        username = input;
+        socket.emit("register_username", username);
+        console.log("Username set to:", username);
+        document.getElementById("usernameModal").style.display = "none";
+      }
+    }
 
-        function submitUsername() {
-            const input = document.getElementById("usernameInput").value.trim();
-            if (input) {
-                username = input;
-		socket.emit("register_username", username);
-                controlsEnabled = true;
-                document.getElementById("usernameModal").style.display = "none";
-                console.log("Username set to:", username);
-            }
-        }
+    socket.on("connect", function () {
+      console.log("WebSocket Connected!");
+    });
 
-        socket.on("connect", function() {
-            console.log("WebSocket Connected!");
-        });
+    socket.on("disconnect", function () {
+      console.log("WebSocket Disconnected!");
+    });
 
-        socket.on("disconnect", function() {
-            console.log("WebSocket Disconnected!");
-        });
+    socket.on("car_assignment", function ({ carColor, carIP }) {
+      assignedCarIP = carIP;
+      controlsEnabled = true;
+      document.getElementById("assignedCarText").textContent = "You are driving: " + carColor + " Car";
+      document.getElementById("video-feed").src = "/video_feed/" + carIP;
 
-        function sendCommand(action) {
-            if (!controlsEnabled) return;
-            console.log("Sending command to", selectedCar, ":", action);
-            socket.emit("button_press", { car_ip: selectedCar, action: action });
-        }
+      userCarColor = carColor.toLowerCase();
+      userCarIP = carIP;
 
-        function updateCar() {
-            selectedCar = document.getElementById("carSelect").value;
-            document.getElementById("video-feed").src = "/video_feed/" + selectedCar;
-            console.log("Selected Car:", selectedCar);
-        }
+      // Reset stats
+      currentLap = 0;
+      lapStartTime = null;
+      lastLapTime = null;
+      raceWonBy = null;
+      updateRaceStats(); // Initialize display
+    });
 
-        document.addEventListener("keydown", function(event) {
-            if (!controlsEnabled) return;
-            if (!keys[event.key]) {
-                keys[event.key] = true;
-                if (event.key.toLowerCase() === "w") sendCommand("move_forward");
-                if (event.key.toLowerCase() === "s") sendCommand("move_backward");
-                if (event.key.toLowerCase() === "a") sendCommand("turn_left");
-                if (event.key.toLowerCase() === "d") sendCommand("turn_right");
-            }
-        });
+    socket.on("lap_update", ({ carColor, lapCount, lapTime }) => {
+      if (carColor.toLowerCase() === userCarColor) {
+        // User's car just finished a lap
+        currentLap = lapCount;
+        lastLapTime = lapTime;
+        lapStartTime = Date.now();
 
-        document.addEventListener("keyup", function(event) {
-            if (!controlsEnabled) return;
-            keys[event.key] = false;
-            if (event.key.toLowerCase() === "w") sendCommand("stop");
-            if (event.key.toLowerCase() === "s") sendCommand("stop");
-            if ((event.key.toLowerCase() === "a") && !keys["d"]) sendCommand("stop_turn");
-            if ((event.key.toLowerCase() === "d") && !keys["a"]) sendCommand("stop_turn");
-        });
-    </script>
+        if (lapTimerInterval) clearInterval(lapTimerInterval);
+        lapTimerInterval = setInterval(updateLapTimer, 100); // Real-time timer
+      }
+      updateRaceStats();
+    });
+
+    socket.on("race_winner", (carColor) => {
+      raceWonBy = carColor;
+      if (lapTimerInterval) clearInterval(lapTimerInterval);
+      updateRaceStats();
+    });
+    function sendCommand(action) {
+      if (!controlsEnabled || !assignedCarIP) return;
+      socket.emit("button_press", { car_ip: assignedCarIP, action: action });
+    }
+
+    function updateRaceStats() {
+      const lapDisplay = document.getElementById("lapDisplay");
+      const lastLapElem = document.getElementById("lastLapTime");
+      const currentLapElem = document.getElementById("currentLapTime");
+      const raceWinnerElem = document.getElementById("raceWinnerLine");
+
+      // Lap label
+      if (raceWonBy) {
+        lapDisplay.textContent = "Race Complete";
+      } else if (currentLap >= 3) {
+        lapDisplay.textContent = "Final Lap";
+      } else if (currentLap >= 1) {
+        lapDisplay.textContent = `Lap ${currentLap}`;
+      } else {
+        lapDisplay.textContent = "Waiting...";
+      }
+
+      // Last lap time
+      lastLapElem.textContent = lastLapTime ? `${lastLapTime.toFixed(2)}s` : "--";
+
+      // Race winner
+      if (raceWonBy) {
+        document.getElementById("raceWinnerLine").style.display = "block";
+        document.getElementById("raceWinner").textContent = `${capitalize(raceWonBy)} Car`;
+      }
+    }
+
+    function updateLapTimer() {
+      if (lapStartTime) {
+        const elapsed = (Date.now() - lapStartTime) / 1000;
+        document.getElementById("currentLapTime").textContent = `${elapsed.toFixed(2)}s`;
+      }
+    }
+
+    document.addEventListener("keydown", function (event) {
+      if (!controlsEnabled) return;
+      if (!keys[event.key]) {
+        keys[event.key] = true;
+        if (event.key.toLowerCase() === "w") sendCommand("move_forward");
+        if (event.key.toLowerCase() === "s") sendCommand("move_backward");
+        if (event.key.toLowerCase() === "a") sendCommand("turn_left");
+        if (event.key.toLowerCase() === "d") sendCommand("turn_right");
+      }
+    });
+
+    document.addEventListener("keyup", function (event) {
+      if (!controlsEnabled) return;
+      keys[event.key] = false;
+      if (["w", "s"].includes(event.key.toLowerCase())) sendCommand("stop");
+      if (event.key.toLowerCase() === "a" && !keys["d"]) sendCommand("stop_turn");
+      if (event.key.toLowerCase() === "d" && !keys["a"]) sendCommand("stop_turn");
+    });
+  </script>
 </body>
 </html>

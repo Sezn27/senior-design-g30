@@ -108,6 +108,13 @@ function handleLap(carColor, lapCount, carIP) {
     console.log(`${displayColor} car completed lap ${lapCount}`);
     console.log(`${displayColor.toUpperCase()} Lap ${lapCount}: ${lapTime.toFixed(2)}s`);
 
+    // Send lap update to all clients
+    io.emit("lap_update", {
+        carColor,
+        lapCount,
+        lapTime
+    });
+
     // 🔍 Lookup username
     const username = carToUsername[carIP] || "Unknown";
 
@@ -125,6 +132,9 @@ function handleLap(carColor, lapCount, carIP) {
         if (!raceWinner) {
             raceWinner = carColor; // record first car to reach lap 4
             sendToFinishLine(`show:${displayColor} Car Wins!`);
+
+            // Broadcast race winner to all clients
+            io.emit("race_winner", carColor);
         }
     } else if (lapCount > currentDisplayedLap) {
         currentDisplayedLap = lapCount;
@@ -252,9 +262,27 @@ const rl = readline.createInterface({
 });
 
 rl.on("line", (input) => {
-    if (input.trim().toLowerCase() === "start") {
+    const command = input.trim().toLowerCase();
+
+    if (command === "start") {
         console.log("Start race requested from terminal");
         startRace();
+    }
+
+    // 🚗 Simulate red car lap
+    else if (command === "redlap" && raceStarted && lapCounts.red < LAP_THRESHOLD) {
+        lapCounts.red++;
+        handleLap("red", lapCounts.red, "192.168.1.143");
+    }
+
+    // 🚙 Simulate blue car lap
+    else if (command === "bluelap" && raceStarted && lapCounts.blue < LAP_THRESHOLD) {
+        lapCounts.blue++;
+        handleLap("blue", lapCounts.blue, "192.168.1.87");
+    }
+
+    else if (command === "redlap" || command === "bluelap") {
+        console.log("Race not started or car already completed race.");
     }
 });
 

@@ -152,15 +152,28 @@
         D - Turn Right
       </p>
     </div>
+    <div id="race-stats" class="race-stats">
+      <h2>Race Statistics</h2>
+      <p><strong>Lap:</strong> <span id="lapDisplay">Waiting...</span></p>
+      <p><strong>Current Lap:</strong> <span id="currentLapTime">--</span></p>
+      <p><strong>Last Lap:</strong> <span id="lastLapTime">--</span></p>
+      <p id="raceWinnerLine" style="display: none;"><strong>Race Winner:</strong> <span id="raceWinner">--</span></p>
+    </div>
   </div>
 
   <script>
-    var socket = io("http://192.168.1.86:5001");
-    var assignedCarIP = null;
-    var keys = {};
-    var username = null;
-    var controlsEnabled = false;
-
+    const socket = io("http://192.168.1.86:5001");
+    let assignedCarIP = null;
+    let keys = {};
+    let username = null;
+    let controlsEnabled = false;
+    let userCarColor = null;
+    let userCarIP = null;
+    let currentLap = 0;
+    let lapStartTime = null;
+    let lastLapTime = null;
+    let raceWonBy = null;
+    let lapTimerInterval = null;
     function submitUsername() {
       const input = document.getElementById("usernameInput").value.trim();
       if (input) {
@@ -184,11 +197,73 @@
       controlsEnabled = true;
       document.getElementById("assignedCarText").textContent = "You are driving: " + carColor + " Car";
       document.getElementById("video-feed").src = "/video_feed/" + carIP;
+
+      userCarColor = carColor.toLowerCase();
+      userCarIP = carIP;
+
+      // Reset stats
+      currentLap = 0;
+      lapStartTime = null;
+      lastLapTime = null;
+      raceWonBy = null;
+      updateRaceStats(); // Initialize display
     });
 
+    socket.on("lap_update", ({ carColor, lapCount, lapTime }) => {
+      if (carColor.toLowerCase() === userCarColor) {
+        // User's car just finished a lap
+        currentLap = lapCount;
+        lastLapTime = lapTime;
+        lapStartTime = Date.now();
+
+        if (lapTimerInterval) clearInterval(lapTimerInterval);
+        lapTimerInterval = setInterval(updateLapTimer, 100); // Real-time timer
+      }
+      updateRaceStats();
+    });
+
+    socket.on("race_winner", (carColor) => {
+      raceWonBy = carColor;
+      if (lapTimerInterval) clearInterval(lapTimerInterval);
+      updateRaceStats();
+    });
     function sendCommand(action) {
       if (!controlsEnabled || !assignedCarIP) return;
       socket.emit("button_press", { car_ip: assignedCarIP, action: action });
+    }
+
+    function updateRaceStats() {
+      const lapDisplay = document.getElementById("lapDisplay");
+      const lastLapElem = document.getElementById("lastLapTime");
+      const currentLapElem = document.getElementById("currentLapTime");
+      const raceWinnerElem = document.getElementById("raceWinnerLine");
+
+      // Lap label
+      if (raceWonBy) {
+        lapDisplay.textContent = "Race Complete";
+      } else if (currentLap >= 3) {
+        lapDisplay.textContent = "Final Lap";
+      } else if (currentLap >= 1) {
+        lapDisplay.textContent = `Lap ${currentLap}`;
+      } else {
+        lapDisplay.textContent = "Waiting...";
+      }
+
+      // Last lap time
+      lastLapElem.textContent = lastLapTime ? `${lastLapTime.toFixed(2)}s` : "--";
+
+      // Race winner
+      if (raceWonBy) {
+        document.getElementById("raceWinnerLine").style.display = "block";
+        document.getElementById("raceWinner").textContent = `${capitalize(raceWonBy)} Car`;
+      }
+    }
+
+    function updateLapTimer() {
+      if (lapStartTime) {
+        const elapsed = (Date.now() - lapStartTime) / 1000;
+        document.getElementById("currentLapTime").textContent = `${elapsed.toFixed(2)}s`;
+      }
     }
 
     document.addEventListener("keydown", function (event) {
