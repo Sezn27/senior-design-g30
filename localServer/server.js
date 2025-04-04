@@ -9,10 +9,10 @@ const mysql = require("mysql2");
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
-  }
+    cors: {
+        origin: "*",
+        methods: ["GET", "POST"]
+    }
 });
 
 // MySQL connection pool
@@ -34,8 +34,8 @@ const assignedColors = new Set();
 
 let finishLineSocket = null;
 let lapCounts = {
-  blue: 0,
-  red: 0
+    blue: 0,
+    red: 0
 };
 let redLastLapTime = null;
 let blueLastLapTime = null;
@@ -44,37 +44,37 @@ let currentDisplayedLap = 0;
 let raceStarted = false;
 const detectionCooldown = 3000; // 3 seconds cooldown between detections
 let lastDetectionTime = {
-  blue: 0,
-  red: 0
+    blue: 0,
+    red: 0
 };
 let lapStartTime = {
-  blue: null,
-  red: null
+    blue: null,
+    red: null
 };
 let raceWinner = null;
 
 // Start race sequence
 function startRace() {
-  raceStarted = true;
-  raceWinner = null;
-  currentDisplayedLap = 1;
-  lapCounts.blue = 0;
-  lapCounts.red = 0;
-  lastDetectionTime.blue = 0;
-  lastDetectionTime.red = 0;
-  lapStartTime.blue = Date.now();
-  lapStartTime.red = Date.now();
-  sendToFinishLine("show:countdown");
+    raceStarted = true;
+    raceWinner = null;
+    currentDisplayedLap = 1;
+    lapCounts.blue = 0;
+    lapCounts.red = 0;
+    lastDetectionTime.blue = 0;
+    lastDetectionTime.red = 0;
+    lapStartTime.blue = Date.now();
+    lapStartTime.red = Date.now();
+    sendToFinishLine("show:countdown");
 }
 
 // Send command to finish line ESP32
 function sendToFinishLine(message) {
-  if (finishLineSocket && finishLineSocket.readyState === WebSocket.OPEN) {
-    console.log("Sending to finish line:", message);
-    finishLineSocket.send(message);
-  } else {
-    console.log("Finish line WebSocket not connected.");
-  }
+    if (finishLineSocket && finishLineSocket.readyState === WebSocket.OPEN) {
+        console.log("Sending to finish line:", message);
+        finishLineSocket.send(message);
+    } else {
+        console.log("Finish line WebSocket not connected.");
+    }
 }
 function handleLap(carColor, lapCount, carIP) {
     const now = Date.now();
@@ -176,7 +176,7 @@ finishLineServer.on("connection", (ws) => {
 });
 
 function capitalize(word) {
-  return word.charAt(0).toUpperCase() + word.slice(1);
+    return word.charAt(0).toUpperCase() + word.slice(1);
 }
 
 // 🏎️ Car Control WebSocket (Port 5001)
@@ -207,17 +207,14 @@ io.on("connection", (socket) => {
         socket.emit("car_assignment", { carColor, carIP });
     });
 
-
     socket.on("button_press", async (data) => {
         const carIP = data.car_ip;
         const action = data.action;
-        console.log(`Command for ${carIP}: ${action}`);
 
         try {
-            const response = await axios.get(`http://${carIP}/command?action=${action}`);
-            console.log(`ESP32 ${carIP} Response:`, response.data);
+            await axios.get(`http://${carIP}/command?action=${action}`);
         } catch (error) {
-            console.error(`Error sending command to ${carIP}:`, error.message);
+            console.error(`Error sending command to ${carIP}:`, error.message); // Only log on error
         }
     });
 
@@ -243,22 +240,22 @@ io.on("connection", (socket) => {
 
     // Handle race start request from frontend
     socket.on("start_race", () => {
-      console.log("Start race requested from client");
-      startRace();
+        console.log("Start race requested from client");
+        startRace();
     });
 });
 
 // Enable race start from command line for testing
 const rl = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout
+    input: process.stdin,
+    output: process.stdout
 });
 
 rl.on("line", (input) => {
-  if (input.trim().toLowerCase() === "start") {
-    console.log("Start race requested from terminal");
-    startRace();
-  }
+    if (input.trim().toLowerCase() === "start") {
+        console.log("Start race requested from terminal");
+        startRace();
+    }
 });
 
 server.listen(5001, "0.0.0.0", () => {
