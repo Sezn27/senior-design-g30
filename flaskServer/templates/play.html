@@ -159,6 +159,16 @@
         .start-btn:hover {
           background-color: #009acd;
         }
+
+        #raceCountdown.go-animate {
+          animation: pulse 0.5s ease-in-out 2;
+        }
+
+        @keyframes pulse {
+          0%   { transform: scale(1);   color: #00bfff; }
+          50%  { transform: scale(1.6); color: lime; }
+          100% { transform: scale(1);   color: #00bfff; }
+        }
   </style>
 </head>
 <body>
@@ -203,6 +213,8 @@
       <p><strong>Current Lap:</strong> <span id="currentLapTime" class="highlight-value">--</span></p>
       <p><strong>Last Lap:</strong> <span id="lastLapTime" class="highlight-value">--</span></p>
       <p id="raceWinnerLine" style="display: none;"><strong>Race Winner:</strong> <span id="raceWinner" class="highlight-value">--</span></p>
+
+      <p id="raceCountdown" style="display: none; color: #00bfff;"></p>
 
       <button id="startRaceBtn" class="start-btn">Start Race</button>
     </div>
@@ -344,17 +356,46 @@
 
     document.getElementById("startRaceBtn").addEventListener("click", () => {
       if (controlsEnabled) {
+        // Temporarily disable controls during countdown
+        controlsEnabled = false;
+
+        const countdownElem = document.getElementById("raceCountdown");
+        let count = 3;
+
+        countdownElem.style.display = "block";
+        countdownElem.textContent = `Race begins in: ${count}`;
+
+        const countdownInterval = setInterval(() => {
+          count--;
+
+          if (count > 0) {
+            countdownElem.textContent = `Race begins in: ${count}`;
+          } else if (count === 0) {
+            countdownElem.textContent = "GO!";
+            countdownElem.style.color = "lime"; // Or use "#00ff00"
+            countdownElem.classList.add("go-animate");
+            controlsEnabled = true;
+
+            // Remove animation class after it's done
+            setTimeout(() => {
+              countdownElem.classList.remove("go-animate");
+            }, 1000);
+          } else {
+            clearInterval(countdownInterval);
+            countdownElem.style.display = "none";
+            countdownElem.style.color = "#00bfff";
+          }
+        }, 1000);
+
+        // Tell server to start the race (after countdown starts)
         socket.emit("start_race");
 
-        // 🔄 Reset frontend state
-        currentLap = 1;
+        // Reset frontend state
+        currentLap = 0;
         lapStartTime = null;
         lastLapTime = null;
         raceWonBy = null;
-
         if (lapTimerInterval) clearInterval(lapTimerInterval);
-        lapTimerInterval = setInterval(updateLapTimer, 100);
-
         document.getElementById("currentLapTime").textContent = "--";
 
         updateRaceStats();
