@@ -27,6 +27,14 @@ def generate_frames(car_ip):
 def index():
     return render_template('index.html')
 
+@app.route('/play')
+def play():
+    return render_template('play.html')
+
+@app.route('/leaderboard')
+def leaderboard():
+    return render_template('leaderboard.html')
+
 @app.route('/video_feed/<car_ip>')
 def video_feed(car_ip):
     return Response(generate_frames(car_ip), mimetype='multipart/x-mixed-replace; boundary=frame')
