@@ -92,6 +92,13 @@ function handleLap(carColor, lapCount, carIP) {
         } else {
             blueLastLapTime = now;
         }
+        
+        // ✅ Send lap 1 update so client displays "Lap 1" and starts timer
+        io.emit("lap_update", {
+            carColor,
+            lapCount,
+            lapTime: 0 // First lap has no duration
+        });
 
         return; // ⛔ Skip timing + DB insert
     }

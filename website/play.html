@@ -270,10 +270,18 @@
     });
 
     socket.on("race_winner", (carColor) => {
-      raceWonBy = carColor;
+      raceWonBy = carColor.toLowerCase();
+
       if (lapTimerInterval) clearInterval(lapTimerInterval);
+
+      // ✅ Sync the current lap time display with lastLapTime
+      if (lastLapTime !== null) {
+        document.getElementById("currentLapTime").textContent = `${lastLapTime.toFixed(2)}s`;
+      }
+
       updateRaceStats();
     });
+
     function sendCommand(action) {
       if (!controlsEnabled || !assignedCarIP) return;
       socket.emit("button_press", { car_ip: assignedCarIP, action: action });
@@ -301,8 +309,10 @@
 
       // Race winner
       if (raceWonBy) {
-        document.getElementById("raceWinnerLine").style.display = "block";
-        document.getElementById("raceWinner").textContent = `${capitalize(raceWonBy)} Car`;
+        raceWinnerElem.style.display = "block";
+        document.getElementById("raceWinner").textContent = `${raceWonBy.toUpperCase()} Car`;
+      } else {
+        raceWinnerElem.style.display = "none";
       }
     }
 
@@ -335,10 +345,25 @@
     document.getElementById("startRaceBtn").addEventListener("click", () => {
       if (controlsEnabled) {
         socket.emit("start_race");
+
+        // 🔄 Reset frontend state
+        currentLap = 1;
+        lapStartTime = null;
+        lastLapTime = null;
+        raceWonBy = null;
+
+        if (lapTimerInterval) clearInterval(lapTimerInterval);
+        lapTimerInterval = setInterval(updateLapTimer, 100);
+
+        document.getElementById("currentLapTime").textContent = "--";
+
+        updateRaceStats();
       } else {
         alert("You must be assigned a car before starting the race.");
       }
     });
+
+    document.getElementById("submitUsernameBtn").addEventListener("click", submitUsername);
   </script>
 </body>
 </html>
