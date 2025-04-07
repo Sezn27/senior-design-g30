@@ -40,6 +40,17 @@
         .exit-button:hover {
             background-color: #cc0000;
         }
+        .leaderboard-button {
+          padding: 10px 20px;
+          background-color: #2b2a33;
+          color: #fff;
+          text-decoration: none;
+          font-size: 18px;
+          border-radius: 5px;
+        }
+        .leaderboard-button:hover {
+          background-color: #00bfff;
+        }
         /* Main content container */
         .main-container {
             display: flex;
@@ -116,6 +127,38 @@
             border-radius: 5px;
             cursor: pointer;
         }
+        /* Race Statistics Styling */
+        .race-stats h2 {
+          color: #fff;
+          font-size: 18px;
+          margin-bottom: 12px;
+          border-bottom: 1px solid #444;
+          padding-bottom: 5px;
+        }
+        .race-stats p {
+          font-size: 14px;
+          margin: 6px 0;
+        }
+        .highlight-value {
+          font-weight: bold;
+          color: #00bfff; /* light blue for emphasis */
+        }
+
+        /* Start Race Button Stying */
+        .start-btn {
+          margin-top: 15px;
+          padding: 10px 20px;
+          background-color: #00bfff;
+          color: #fff;
+          border: none;
+          border-radius: 6px;
+          cursor: pointer;
+          font-size: 14px;
+          transition: background-color 0.3s;
+        }
+        .start-btn:hover {
+          background-color: #009acd;
+        }
   </style>
 </head>
 <body>
@@ -131,7 +174,10 @@
   <!-- Navigation Bar -->
   <div class="navbar">
     <h1>R.A.C.E: Remote Access Control for Electric Cars</h1>
-    <a href="index.html" class="exit-button">Exit Race</a>
+    <div class="nav-buttons">
+      <a href="leaderboard.html" class="leaderboard-button">Leaderboard</a>
+      <a href="index.html" class="exit-button">Exit Race</a>
+    </div>
   </div>
 
   <!-- Main Content -->
@@ -151,13 +197,14 @@
         A - Turn Left<br />
         D - Turn Right
       </p>
-    </div>
-    <div id="race-stats" class="race-stats">
+
       <h2>Race Statistics</h2>
-      <p><strong>Lap:</strong> <span id="lapDisplay">Waiting...</span></p>
-      <p><strong>Current Lap:</strong> <span id="currentLapTime">--</span></p>
-      <p><strong>Last Lap:</strong> <span id="lastLapTime">--</span></p>
-      <p id="raceWinnerLine" style="display: none;"><strong>Race Winner:</strong> <span id="raceWinner">--</span></p>
+      <p><strong>Lap:</strong> <span id="lapDisplay" class="highlight-value">Waiting...</span></p>
+      <p><strong>Current Lap:</strong> <span id="currentLapTime" class="highlight-value">--</span></p>
+      <p><strong>Last Lap:</strong> <span id="lastLapTime" class="highlight-value">--</span></p>
+      <p id="raceWinnerLine" style="display: none;"><strong>Race Winner:</strong> <span id="raceWinner" class="highlight-value">--</span></p>
+
+      <button id="startRaceBtn" class="start-btn">Start Race</button>
     </div>
   </div>
 
@@ -283,6 +330,14 @@
       if (["w", "s"].includes(event.key.toLowerCase())) sendCommand("stop");
       if (event.key.toLowerCase() === "a" && !keys["d"]) sendCommand("stop_turn");
       if (event.key.toLowerCase() === "d" && !keys["a"]) sendCommand("stop_turn");
+    });
+
+    document.getElementById("startRaceBtn").addEventListener("click", () => {
+      if (controlsEnabled) {
+        socket.emit("start_race");
+      } else {
+        alert("You must be assigned a car before starting the race.");
+      }
     });
   </script>
 </body>

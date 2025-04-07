@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Leaderboard - R.A.C.E</title>
+    <link rel="stylesheet" href="styles.css" />
+    <style>
+        body {
+            background-color: #2b2a33;
+            color: #ffffff;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+
+        .navbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: #1c1b22;
+            padding: 15px 30px;
+        }
+        
+        .navbar h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+
+        .play-button {
+            padding: 10px 20px;
+            background-color: #2b2a33;
+            color: #fff;
+            text-decoration: none;
+            font-size: 18px;
+            border-radius: 5px;
+        }
+
+        .play-button:hover {
+            background-color: #32CD32;
+        }
+
+        .home-button {
+            padding: 10px 20px;
+            background-color: #2b2a33;
+            color: #fff;
+            text-decoration: none;
+            font-size: 18px;
+            border-radius: 5px;
+        }
+
+        .home-button:hover {
+            background-color: #00bfff;
+        }
+
+        .leaderboard-container {
+            padding: 30px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        th, td {
+            border: 1px solid #333;
+            padding: 10px;
+            text-align: center;
+        }
+
+        th {
+            background-color: #222;
+            color: #00bfff;
+        }
+
+        td {
+            background-color: #1a1a1a;
+        }
+    </style>
+</head>
+<body>
+<nav class="navbar">
+    <h1>R.A.C.E: Remote Access Control for Electric Cars</h1>
+    <div class="nav-buttons">
+        <a href="index.html" class="home-button">Home</a>
+        <a href="play.html" class="play-button">Play</a>
+    </div>
+</nav>
+
+<div class="leaderboard-container">
+    <h1>Leaderboard</h1>
+    <table id="leaderboardTable">
+        <thead>
+        <tr>
+            <th>Username</th>
+            <th>Car Color</th>
+            <th>Lap Time</th>
+            <th>Lap</th>
+            <th>Timestamp</th>
+        </tr>
+        </thead>
+        <tbody>
+        <!-- Rows will be added dynamically -->
+        </tbody>
+    </table>
+</div>
+
+<script>
+    window.addEventListener("DOMContentLoaded", () => {
+        fetch("http://192.168.1.86:5001/api/leaderboard")
+            .then(response => response.json())
+            .then(data => {
+                const tableBody = document.getElementById("leaderboardTable").querySelector("tbody");
+
+                data.forEach(entry => {
+                    const row = document.createElement("tr");
+
+                    const usernameCell = document.createElement("td");
+                    usernameCell.textContent = entry.username;
+
+                    const carColorCell = document.createElement("td");
+                    carColorCell.textContent = entry.car_number === 1 ? "Red" : "Blue";
+
+                    const lapTimeCell = document.createElement("td");
+                    lapTimeCell.textContent = entry.lap_time.toFixed(2) + "s";
+
+                    const lapCountCell = document.createElement("td");
+                    lapCountCell.textContent = entry.lap_count;
+
+                    const timestampCell = document.createElement("td");
+                    const timestamp = new Date(entry.timestamp);
+                    timestampCell.textContent = timestamp.toLocaleString();
+
+                    row.appendChild(usernameCell);
+                    row.appendChild(carColorCell);
+                    row.appendChild(lapTimeCell);
+                    row.appendChild(lapCountCell);
+                    row.appendChild(timestampCell);
+
+                    tableBody.appendChild(row);
+                });
+            })
+            .catch(error => {
+                console.error("Failed to load leaderboard:", error);
+            });
+    });
+</script>
+</body>
+</html>

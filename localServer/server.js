@@ -5,7 +5,7 @@ const WebSocket = require("ws");
 const axios = require("axios"); // Required for HTTP forwarding
 const readline = require("readline"); // For command line input
 const mysql = require("mysql2");
-
+const cors = require("cors");
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -14,6 +14,7 @@ const io = new Server(server, {
         methods: ["GET", "POST"]
     }
 });
+app.use(cors());
 
 // MySQL connection pool
 const db = mysql.createPool({
@@ -284,6 +285,21 @@ rl.on("line", (input) => {
     else if (command === "redlap" || command === "bluelap") {
         console.log("Race not started or car already completed race.");
     }
+});
+
+// Serve leaderboard data
+app.get("/api/leaderboard", (req, res) => {
+    db.query(
+        "SELECT username, car_number, lap_time, lap_count, timestamp FROM leaderboard ORDER BY lap_time ASC LIMIT 50",
+        (err, results) => {
+            if (err) {
+                console.error("Database error:", err);
+                res.status(500).json({ error: "Database query failed" });
+                return;
+            }
+            res.json(results);
+        }
+    );
 });
 
 server.listen(5001, "0.0.0.0", () => {

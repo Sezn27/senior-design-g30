@@ -32,7 +32,18 @@
             border-radius: 5px;
         }
         .play-button:hover {
-            background-color: #a822ff;
+            background-color: #32CD32;
+        }
+        .leaderboard-button {
+            padding: 10px 20px;
+            background-color: #2b2a33;
+            color: #fff;
+            text-decoration: none;
+            font-size: 18px;
+            border-radius: 5px;
+        }
+        .leaderboard-button:hover {
+            background-color: #00bfff;
         }
         .container {
             display: flex;
@@ -62,7 +73,10 @@
 <body>
     <div class="navbar">
         <h1>R.A.C.E: Remote Access Control for Electric Cars</h1>
-        <a href="play.html" class="play-button">Play</a>
+        <div class="nav-buttons">
+            <a href="leaderboard.html" class="leaderboard-button">Leaderboard</a>
+            <a href="play.html" class="play-button">Play</a>
+        </div>
     </div>
     <div class="container">
         <div class="video-container">
