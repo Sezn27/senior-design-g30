@@ -4,8 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>R.A.C.E - Play</title>
-  <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script> -->
-  <script src="http://192.168.0.100:5001/socket.io/socket.io.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
   <style>
         /* General page styling */
         body {
@@ -202,6 +201,10 @@
       <p id="assignedCarText">Waiting for assignment...</p>
 
       <h2>Controls</h2>
+      <p id="delayStatus" style="font-size: 16px; color: #00ff00; margin-bottom: 8px;">
+        Control Delay: <span id="delayValue">0</span> ms
+      </p>
+      <p class="control-description">
       <p class="control-description">
         W - Accelerate<br />
         S - Brake/Reverse<br />
@@ -296,9 +299,19 @@
     });
 
     function sendCommand(action) {
-      if (!controlsEnabled || !assignedCarIP) return;
-      socket.emit("button_press", { car_ip: assignedCarIP, action: action });
+  if (!controlsEnabled || !assignedCarIP) return;
+  const start = performance.now();
+
+  socket.emit("button_press", { car_ip: assignedCarIP, action: action }, (ack) => {
+    if (ack && ack.delay !== undefined) {
+      document.getElementById("delayValue").textContent = ack.delay;
+    } else {
+      const fallback = Math.round(performance.now() - start);
+      document.getElementById("delayValue").textContent = fallback;
     }
+  });
+}
+
 
     function updateRaceStats() {
       const lapDisplay = document.getElementById("lapDisplay");

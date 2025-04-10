@@ -15,7 +15,6 @@ const io = new Server(server, {
     }
 });
 app.use(cors());
-app.use(express.static("public"));
 
 // MySQL connection pool
 const db = mysql.createPool({
@@ -26,10 +25,10 @@ const db = mysql.createPool({
 });
 
 // IPs of the ESP32 cars
-const carIPs = ["192.168.1.143", "192.168.1.87"]; // Red and Blue
+const carIPs = ["192.168.1.140", "192.168.1.143"]; // Red and Blue
 const carColors = {
-    "192.168.1.143": "Red",
-    "192.168.1.87": "Blue"
+    "192.168.1.140": "Red",
+    "192.168.1.143": "Blue"
 };
 const carToUsername = {};
 const assignedColors = new Set();
@@ -178,13 +177,13 @@ finishLineServer.on("connection", (ws) => {
         if (color === "red" && now - lastDetectionTime.red >= detectionCooldown) {
             lastDetectionTime.red = now;
             lapCounts.red++;
-            handleLap("red", lapCounts.red, "192.168.1.143");
+            handleLap("red", lapCounts.red, "192.168.1.140");
         }
 
         if (color === "blue" && now - lastDetectionTime.blue >= detectionCooldown) {
             lastDetectionTime.blue = now;
             lapCounts.blue++;
-            handleLap("blue", lapCounts.blue, "192.168.1.87");
+            handleLap("blue", lapCounts.blue, "192.168.1.143");
         }
     });
 
@@ -208,11 +207,11 @@ io.on("connection", (socket) => {
 
         if (!assignedColors.has("Red")) {
             carColor = "Red";
-            carIP = "192.168.1.143";
+            carIP = "192.168.1.140";
             assignedColors.add("Red");
         } else if (!assignedColors.has("Blue")) {
             carColor = "Blue";
-            carIP = "192.168.1.87";
+            carIP = "192.168.1.143";
             assignedColors.add("Blue");
         } else {
             socket.emit("car_assignment", { carColor: "Spectator", carIP: null });
@@ -226,16 +225,23 @@ io.on("connection", (socket) => {
         socket.emit("car_assignment", { carColor, carIP });
     });
 
-    socket.on("button_press", async (data) => {
+    socket.on("button_press", async (data, ackCallback) => {
         const carIP = data.car_ip;
         const action = data.action;
-
+        const startTime = Date.now();
+        console.log(`Command for ${carIP}: ${action}`);
+    
         try {
-            await axios.get(`http://${carIP}/command?action=${action}`);
+            const response = await axios.get(`http://${carIP}/command?action=${action}`);
+            console.log(`ESP32 ${carIP} Response:`, response.data);
+    
+            const delay = Date.now() - startTime;
+            if (ackCallback) ackCallback({ delay }); // ✅ Emit delay
         } catch (error) {
-            console.error(`Error sending command to ${carIP}:`, error.message); // Only log on error
+            console.error(`Error sending command to ${carIP}:`, error.message);
         }
     });
+    
 
     socket.on("disconnect", () => {
         console.log("Client disconnected:", socket.id);
@@ -281,13 +287,13 @@ rl.on("line", (input) => {
     // 🚗 Simulate red car lap
     else if (command === "redlap" && raceStarted && lapCounts.red < LAP_THRESHOLD) {
         lapCounts.red++;
-        handleLap("red", lapCounts.red, "192.168.1.143");
+        handleLap("red", lapCounts.red, "192.168.1.140");
     }
 
     // 🚙 Simulate blue car lap
     else if (command === "bluelap" && raceStarted && lapCounts.blue < LAP_THRESHOLD) {
         lapCounts.blue++;
-        handleLap("blue", lapCounts.blue, "192.168.1.87");
+        handleLap("blue", lapCounts.blue, "192.168.1.143");
     }
 
     else if (command === "redlap" || command === "bluelap") {
