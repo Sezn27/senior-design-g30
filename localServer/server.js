@@ -8,6 +8,7 @@ const mysql = require("mysql2");
 const cors = require("cors");
 const app = express();
 const server = http.createServer(app);
+app.use(express.static("public")); 
 const io = new Server(server, {
     cors: {
         origin: "*",
@@ -25,10 +26,10 @@ const db = mysql.createPool({
 });
 
 // IPs of the ESP32 cars
-const carIPs = ["192.168.1.140", "192.168.1.143"]; // Red and Blue
+const carIPs = ["192.168.0.102", "192.168.0.104"]; // Red and Blue
 const carColors = {
-    "192.168.1.140": "Red",
-    "192.168.1.143": "Blue"
+    "192.168.0.102": "Red",
+    "192.168.0.104": "Blue"
 };
 const carToUsername = {};
 const assignedColors = new Set();
@@ -43,7 +44,7 @@ let blueLastLapTime = null;
 const LAP_THRESHOLD = 4;
 let currentDisplayedLap = 0;
 let raceStarted = false;
-const detectionCooldown = 3000; // 3 seconds cooldown between detections
+const detectionCooldown = 5000; // 3 seconds cooldown between detections
 let lastDetectionTime = {
     blue: 0,
     red: 0
@@ -53,6 +54,18 @@ let lapStartTime = {
     red: null
 };
 let raceWinner = null;
+
+let playerReadyStatus = {
+    red: false,
+    blue: false
+};
+let cancelVotes = { red: false, blue: false };
+
+function resetCancelVotes() {
+    cancelVotes.red = false;
+    cancelVotes.blue = false;
+}
+
 
 // Start race sequence
 function startRace() {
@@ -65,8 +78,43 @@ function startRace() {
     lastDetectionTime.red = 0;
     lapStartTime.blue = Date.now();
     lapStartTime.red = Date.now();
+
+    // 🛑 Send stop command to both cars
+    sendStopCommandToAllCars();
+
+    // 🔁 Let the ESP32 + clients know the race started
     sendToFinishLine("show:countdown");
+    io.emit("race_started");
 }
+
+function sendStopCommandToAllCars() {
+    const carIPs = ["192.168.0.140", "192.168.0.143"]; // Adjust if needed
+    carIPs.forEach(ip => {
+        axios.get(`http://${ip}/command?action=stop`).catch((err) => {
+            console.warn(`Failed to stop car at ${ip}: ${err.message}`);
+        });
+    });
+}
+
+function resetRaceState() {
+    raceStarted = false;
+    raceWinner = null;
+    currentDisplayedLap = 0;
+    lapCounts = { blue: 0, red: 0 };
+    lastDetectionTime = { blue: 0, red: 0 };
+    lapStartTime = { blue: null, red: null };
+    redLastLapTime = null;
+    blueLastLapTime = null;
+    playerReadyStatus = { red: false, blue: false };
+    cancelVotes = { red: false, blue: false };
+
+    // ✅ Add this to notify frontends:
+    io.emit("reset_race");
+}
+
+
+
+
 
 // Send command to finish line ESP32
 function sendToFinishLine(message) {
@@ -138,12 +186,22 @@ function handleLap(carColor, lapCount, carIP) {
     // 🎯 Finish line display
     if (lapCount === LAP_THRESHOLD) {
         if (!raceWinner) {
-            raceWinner = carColor; // record first car to reach lap 4
+            raceWinner = carColor;
             sendToFinishLine(`show:${displayColor} Car Wins!`);
-
-            // Broadcast race winner to all clients
             io.emit("race_winner", carColor);
+        
+            // ⏳ Wait for other player to finish, then reset
+            const otherCar = carColor === "red" ? "blue" : "red";
+        
+            const checkBothDone = setInterval(() => {
+                if (lapCounts[otherCar] >= LAP_THRESHOLD) {
+                    console.log("Both players finished. Resetting race state.");
+                    resetRaceState();
+                    clearInterval(checkBothDone);
+                }
+            }, 1000);
         }
+        
     } else if (lapCount > currentDisplayedLap) {
         currentDisplayedLap = lapCount;
         sendToFinishLine(`show:lap ${lapCount}`);
@@ -177,13 +235,13 @@ finishLineServer.on("connection", (ws) => {
         if (color === "red" && now - lastDetectionTime.red >= detectionCooldown) {
             lastDetectionTime.red = now;
             lapCounts.red++;
-            handleLap("red", lapCounts.red, "192.168.1.140");
+            handleLap("red", lapCounts.red, "192.168.0.102");
         }
 
         if (color === "blue" && now - lastDetectionTime.blue >= detectionCooldown) {
             lastDetectionTime.blue = now;
             lapCounts.blue++;
-            handleLap("blue", lapCounts.blue, "192.168.1.143");
+            handleLap("blue", lapCounts.blue, "192.168.0.104");
         }
     });
 
@@ -207,11 +265,11 @@ io.on("connection", (socket) => {
 
         if (!assignedColors.has("Red")) {
             carColor = "Red";
-            carIP = "192.168.1.140";
+            carIP = "192.168.0.102";
             assignedColors.add("Red");
         } else if (!assignedColors.has("Blue")) {
             carColor = "Blue";
-            carIP = "192.168.1.143";
+            carIP = "192.168.0.104";
             assignedColors.add("Blue");
         } else {
             socket.emit("car_assignment", { carColor: "Spectator", carIP: null });
@@ -265,9 +323,44 @@ io.on("connection", (socket) => {
 
     // Handle race start request from frontend
     socket.on("start_race", () => {
-        console.log("Start race requested from client");
-        startRace();
+        if (raceStarted) {
+            console.log("Race already in progress — ignoring duplicate start.");
+            return;
+        }        
+
+        const carIP = Object.keys(carToUsername).find(ip => carToUsername[ip] === socket.username);
+        const color = carColors[carIP]?.toLowerCase();
+    
+        if (!color) return;
+    
+        playerReadyStatus[color] = true;
+        console.log(`${color} car is ready`);
+    
+        if (playerReadyStatus.red && playerReadyStatus.blue && !raceStarted) {
+            console.log("Both players ready, starting race");
+            startRace();
+            playerReadyStatus.red = false;
+            playerReadyStatus.blue = false;
+        }
     });
+    
+    socket.on("vote_cancel", () => {
+        const carIP = Object.keys(carToUsername).find(ip => carToUsername[ip] === socket.username);
+        const color = carColors[carIP]?.toLowerCase();
+    
+        if (!color || !raceStarted || lapCounts[color] >= LAP_THRESHOLD) return;
+    
+        cancelVotes[color] = true;
+        console.log(`${color} voted to cancel.`);
+    
+        const other = color === "red" ? "blue" : "red";
+        if (cancelVotes[other]) {
+            console.log("Both players voted to cancel. Resetting race...");
+            resetRaceState();
+        }
+    });
+    
+
 });
 
 // Enable race start from command line for testing
@@ -287,13 +380,13 @@ rl.on("line", (input) => {
     // 🚗 Simulate red car lap
     else if (command === "redlap" && raceStarted && lapCounts.red < LAP_THRESHOLD) {
         lapCounts.red++;
-        handleLap("red", lapCounts.red, "192.168.1.140");
+        handleLap("red", lapCounts.red, "192.168.0.102");
     }
 
     // 🚙 Simulate blue car lap
     else if (command === "bluelap" && raceStarted && lapCounts.blue < LAP_THRESHOLD) {
         lapCounts.blue++;
-        handleLap("blue", lapCounts.blue, "192.168.1.143");
+        handleLap("blue", lapCounts.blue, "192.168.0.104");
     }
 
     else if (command === "redlap" || command === "bluelap") {

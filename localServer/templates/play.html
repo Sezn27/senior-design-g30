@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>R.A.C.E - Play</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+  <script src="http://192.168.0.101:5001/socket.io/socket.io.js"></script>
   <style>
         /* General page styling */
         body {
@@ -177,7 +177,7 @@
     <div class="modal-content">
       <h2>Enter Your Username</h2>
       <input type="text" id="usernameInput" placeholder="Username"/>
-      <button onclick="submitUsername()">Submit</button>
+      <button id="submitUsernameBtn">Submit</button>
     </div>
   </div>
 
@@ -225,7 +225,7 @@
   </div>
 
   <script>
-    const socket = io("http://192.168.1.86:5001");
+    const socket = io("http://192.168.0.101:5001");
     let assignedCarIP = null;
     let keys = {};
     let username = null;
